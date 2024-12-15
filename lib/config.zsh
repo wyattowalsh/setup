@@ -6,16 +6,16 @@
 source "${0:A:h}/logging.zsh"
 
 # Default configuration file
-typeset -r DEFAULT_CONFIG="setup.yaml"
+declare -r DEFAULT_CONFIG="setup.yaml"
 
 # Environment states
-typeset -A ENVIRONMENTS
+declare -A ENVIRONMENTS
 
 # Package lists
-typeset -A BREW_PACKAGES
-typeset -A CASK_PACKAGES
-typeset -A NPM_PACKAGES
-typeset -A PIP_PACKAGES
+declare -A BREW_PACKAGES
+declare -A CASK_PACKAGES
+declare -A NPM_PACKAGES
+declare -A PIP_PACKAGES
 
 # Load YAML configuration
 load_config() {
@@ -206,6 +206,6 @@ validate_config() {
 }
 
 # Export functions
-typeset -fx load_config load_package_list enable_environment disable_environment
-typeset -fx list_environments get_enabled_environments get_environment_packages
-typeset -fx validate_config 
+export -f load_config load_package_list enable_environment disable_environment
+export -f list_environments get_enabled_environments get_environment_packages
+export -f validate_config 

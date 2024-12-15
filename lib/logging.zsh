@@ -3,7 +3,7 @@
 # Terminal formatting utilities for beautiful CLI output
 
 # Color codes
-typeset -rA COLORS=(
+declare -rA COLORS=(
     [reset]='\033[0m'
     [bold]='\033[1m'
     [dim]='\033[2m'
@@ -31,7 +31,7 @@ typeset -rA COLORS=(
 )
 
 # Unicode symbols
-typeset -rA SYMBOLS=(
+declare -rA SYMBOLS=(
     [check]='✓'
     [cross]='✗'
     [dot]='•'
@@ -53,12 +53,12 @@ typeset -rA SYMBOLS=(
 )
 
 # Progress bar settings
-typeset -r PROGRESS_WIDTH=40
-typeset -r PROGRESS_FILLED='█'
-typeset -r PROGRESS_EMPTY='░'
+declare -r PROGRESS_WIDTH=40
+declare -r PROGRESS_FILLED='█'
+declare -r PROGRESS_EMPTY='░'
 
 # Spinner frames for loading animations
-typeset -ra SPINNER_FRAMES=(
+declare -ra SPINNER_FRAMES=(
     '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏'
 )
 

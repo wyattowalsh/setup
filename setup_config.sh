@@ -9,10 +9,10 @@
 ###################################################
 
 # Initialize associative arrays
-typeset -A GROUP_ENABLED
-typeset -A PACKAGE_GROUPS
-typeset -A GROUP_DESCRIPTIONS
-typeset -a SHELL_CONFIGS
+declare -A GROUP_ENABLED
+declare -A PACKAGE_GROUPS
+declare -A GROUP_DESCRIPTIONS
+declare -a SHELL_CONFIGS
 
 # Function to validate YAML structure
 validate_yaml() {
