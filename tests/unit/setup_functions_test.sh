@@ -1,121 +1,138 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
+# shellcheck shell=bash
+# shellcheck disable=SC2296,SC2299,SC2300,SC2301,SC2128,SC2034,SC2154
 
-# Source test helper
-source "$(dirname "$0")/../test_helper.sh"
+source "${0:A:h}/../test_helper.sh"
 
-# Source the functions to test
-source "./setup_functions.sh"
-
-test_check_macos_compatibility() {
-    echo "Testing check_macos_compatibility..."
+# Test YAML parsing functions
+test_parse_yaml() {
+    local yaml_content='
+packages:
+  brew:
+    - git
+    - zsh
+  cask:
+    - visual-studio-code
+    - iterm2
+environments:
+  dev:
+    enabled: true
+    packages:
+      - git
+      - zsh
+'
+    local test_yaml="$TEST_WORKSPACE/test.yaml"
+    echo "$yaml_content" > "$test_yaml"
     
-    # Test successful case
-    mock_command "sw_vers" "12.0.0"
-    mock_command "uname" "Darwin"
-    output=$(check_macos_compatibility)
-    assert_contains "$output" "Detected macOS version: 12.0.0" "Should detect correct macOS version"
-    
-    # Test non-Darwin OS
-    mock_command "uname" "Linux"
-    if output=$(check_macos_compatibility 2>&1); then
-        echo "Should fail on non-Darwin OS"
-        return 1
-    fi
-    assert_contains "$output" "This script is intended for macOS only" "Should show correct error for non-Darwin OS"
-    
-    # Test old macOS version
-    mock_command "uname" "Darwin"
-    mock_command "sw_vers" "10.14.0"
-    if output=$(check_macos_compatibility 2>&1); then
-        echo "Should fail on old macOS version"
-        return 1
-    fi
-    assert_contains "$output" "This script requires at least macOS 10.15" "Should show correct error for old macOS"
+    # Test YAML parsing
+    local result
+    result=$(parse_yaml "$test_yaml")
+    assert_contains "$result" "packages_brew_1=git" "YAML parser should handle nested arrays"
+    assert_contains "$result" "environments_dev_enabled=true" "YAML parser should handle boolean values"
 }
 
-test_check_user_privileges() {
-    echo "Testing check_user_privileges..."
+# Test environment validation functions
+test_validate_environment() {
+    # Test valid environment
+    local result
+    result=$(validate_environment "dev")
+    assert_equals 0 $? "Valid environment should pass validation"
     
-    # Test non-root user
-    EUID=1000
-    output=$(check_user_privileges)
-    assert_equals "" "$output" "Should succeed silently for non-root user"
-    
-    # Test root user
-    EUID=0
-    if output=$(check_user_privileges 2>&1); then
-        echo "Should fail for root user"
-        return 1
-    fi
-    assert_contains "$output" "This script should not be run as root" "Should show correct error for root user"
+    # Test invalid environment
+    result=$(validate_environment "nonexistent")
+    assert_equals 1 $? "Invalid environment should fail validation"
 }
 
-test_check_dependencies() {
-    echo "Testing check_dependencies..."
-    
-    # Test all dependencies available
-    mock_command "curl" "curl 7.79.1"
-    mock_command "git" "git version 2.33.0"
-    mock_command "jq" "jq-1.6"
-    
-    output=$(check_dependencies)
-    assert_equals "" "$output" "Should succeed silently when all dependencies are available"
-    
-    # Test missing dependency
-    rm "$TEST_WORKSPACE/bin/jq"
-    output=$(check_dependencies 2>&1) || true
-    assert_contains "$output" "Dependency jq is missing" "Should detect missing dependency"
-}
-
-test_install_or_upgrade_brew_item() {
-    echo "Testing install_or_upgrade_brew_item..."
-    
-    # Mock brew command
+# Test package installation functions
+test_install_package() {
     mock_homebrew
     
-    # Test installing new formula
-    output=$(install_or_upgrade_brew_item "new-package" "formula")
-    assert_contains "$output" "Installing formula: new-package" "Should show installing message for new formula"
+    # Test brew package installation
+    local result
+    result=$(install_package "git" "brew")
+    assert_equals 0 $? "Brew package installation should succeed"
+    assert_contains "$result" "brew install git" "Should attempt to install brew package"
     
-    # Test upgrading existing formula
-    output=$(install_or_upgrade_brew_item "installed-package-1" "formula")
-    assert_contains "$output" "Formula installed-package-1 is already installed via Homebrew" "Should detect existing formula"
-    
-    # Test installing new cask
-    output=$(install_or_upgrade_brew_item "new-cask" "cask")
-    assert_contains "$output" "Installing cask: new-cask" "Should show installing message for new cask"
+    # Test cask package installation
+    result=$(install_package "visual-studio-code" "cask")
+    assert_equals 0 $? "Cask package installation should succeed"
+    assert_contains "$result" "brew install --cask visual-studio-code" "Should attempt to install cask package"
 }
 
-test_append_shell_configs_to_zshrc() {
-    echo "Testing append_shell_configs_to_zshrc..."
+# Test parallel installation functions
+test_parallel_install() {
+    mock_homebrew
     
-    # Create test .zshrc
-    echo "# Existing config" > "$HOME/.zshrc"
+    # Test parallel brew installation
+    local packages=("git" "zsh" "wget")
+    local result
+    result=$(parallel_install_packages "$packages" "brew")
+    assert_equals 0 $? "Parallel brew installation should succeed"
     
-    # Test appending new config
-    SHELL_CONFIGS=("test_config_1" "test_config_2")
-    append_shell_configs_to_zshrc
+    # Test parallel cask installation
+    local casks=("visual-studio-code" "iterm2")
+    result=$(parallel_install_packages "$casks" "cask")
+    assert_equals 0 $? "Parallel cask installation should succeed"
+}
+
+# Test error handling functions
+test_error_handling() {
+    # Test error logging
+    local result
+    result=$(log_error "Test error message")
+    assert_contains "$result" "ERROR" "Error logging should include ERROR prefix"
+    assert_contains "$result" "Test error message" "Error logging should include message"
     
-    # Verify configs were appended
-    zshrc_content=$(cat "$HOME/.zshrc")
-    assert_contains "$zshrc_content" "test_config_1" "Should append first config"
-    assert_contains "$zshrc_content" "test_config_2" "Should append second config"
+    # Test error recovery
+    result=$(handle_error "test_function" "Test error")
+    assert_contains "$result" "Attempting to recover" "Error handler should attempt recovery"
+}
+
+# Test configuration validation
+test_validate_config() {
+    local yaml_content='
+packages:
+  brew:
+    - git
+    - zsh
+  cask:
+    - visual-studio-code
+environments:
+  dev:
+    enabled: true
+    packages:
+      - git
+'
+    local test_yaml="$TEST_WORKSPACE/test.yaml"
+    echo "$yaml_content" > "$test_yaml"
     
-    # Test not duplicating existing config
-    append_shell_configs_to_zshrc
+    # Test valid configuration
+    local result
+    result=$(validate_config "$test_yaml")
+    assert_equals 0 $? "Valid configuration should pass validation"
     
-    # Count occurrences of test configs
-    occurrences=$(grep -c "test_config_1" "$HOME/.zshrc")
-    assert_equals "1" "$occurrences" "Should not duplicate existing configs"
+    # Test invalid configuration
+    echo "invalid: yaml: content:" > "$test_yaml"
+    result=$(validate_config "$test_yaml")
+    assert_equals 1 $? "Invalid configuration should fail validation"
 }
 
 # Run all tests
-main() {
-    test_check_macos_compatibility
-    test_check_user_privileges
-    test_check_dependencies
-    test_install_or_upgrade_brew_item
-    test_append_shell_configs_to_zshrc
+run_tests() {
+    # Setup test environment
+    setup
+    
+    # Run individual test functions
+    test_parse_yaml
+    test_validate_environment
+    test_install_package
+    test_parallel_install
+    test_error_handling
+    test_validate_config
+    
+    # Cleanup test environment
+    teardown
 }
 
-main 
+# Execute tests
+run_tests

@@ -1,132 +1,240 @@
-#!/bin/bash
-# This script is intended to be sourced by zsh but maintains sh compatibility for linting
+#!/usr/bin/env zsh
+# shellcheck shell=bash
+# shellcheck disable=SC2296,SC2299,SC2300,SC2301
 
 ###################################################
 # Configuration settings for setup.zsh
 #
-# Define package groups and their configurations for macOS setup.
+# Load package groups and configurations from setup.yaml
 ###################################################
 
-# Group configuration
-# Set to true to enable, false to disable
-declare -A GROUP_ENABLED
-GROUP_ENABLED=(
-    ["core"]="true"              # Core development tools and utilities
-    ["python"]="true"           # Python development environment
-    ["java"]="true"            # Java development environment
-    ["ruby"]="true"            # Ruby development environment
-    ["node"]="true"            # Node.js development environment
-    ["docker"]="true"          # Container development environment
-    ["r_stats"]="true"         # R statistical computing environment
-    ["web"]="true"             # Web development tools
-    ["data_science"]="true"    # Data science and analysis tools
-    ["writing"]="true"         # Documentation and writing tools
-    ["media"]="true"           # Media and entertainment
-    ["system"]="true"          # System utilities and enhancements
-    ["fonts"]="true"           # Development and system fonts
-)
+# Initialize associative arrays
+typeset -A GROUP_ENABLED
+typeset -A PACKAGE_GROUPS
+typeset -A GROUP_DESCRIPTIONS
+typeset -a SHELL_CONFIGS
 
-# Define package groups
-declare -A PACKAGE_GROUPS
-PACKAGE_GROUPS=(
-    ["core"]="gcc git gh make tree wget zsh zsh-completions visual-studio-code github"
+# Function to validate YAML structure
+validate_yaml() {
+    local yaml_file="$1"
+    local required_keys=("groups" "shell_configs")
+    local key
 
-    ["python"]="pyenv poetry miniconda jupyter-notebook-ql sphinx-doc"
+    # Check file exists and is readable
+    if [[ ! -f "$yaml_file" || ! -r "$yaml_file" ]]; then
+        print_message "red" "Error: YAML file '$yaml_file' does not exist or is not readable"
+        return 1
+    fi
 
-    ["java"]="java graphviz"
-
-    ["ruby"]="rbenv ruby-build"
-
-    ["node"]="nvm watchman"
-
-    ["docker"]="docker docker-completion docker-compose"
-
-    ["r_stats"]="r"
-
-    ["web"]="google-chrome responsively quicklook-csv qlmarkdown webpquicklook"
-
-    ["data_science"]="db-browser-for-sqlite jupyter-notebook-ql"
-
-    ["writing"]="mark-text notion obsidian zotero"
-
-    ["media"]="iina spotify"
-
-    ["system"]="glance google-drive logi-options+ slack speedtest-cli unar"
-
-    ["fonts"]="font-sf-pro font-sf-compact font-sf-mono font-new-york font-fira-code font-montserrat font-fontawesome font-awesome-terminal-fonts font-academicons font-devicons font-foundation-icons font-material-design-icons-webfont font-material-icons font-mynaui-icons font-simple-line-icons"
-)
-
-# Function to get all enabled packages
-get_enabled_packages() {
-    local enabled_packages=""
-    local IFS=$'\n'
-    for group in "${!GROUP_ENABLED[@]}"; do
-        if [ "${GROUP_ENABLED[$group]}" = "true" ]; then
-            enabled_packages="${enabled_packages} ${PACKAGE_GROUPS[$group]}"
+    # Check for required top-level keys
+    for key in "${required_keys[@]}"; do
+        if ! yq eval "has(\"$key\")" "$yaml_file" | grep -q "true"; then
+            print_message "red" "Error: Missing required key '$key' in YAML file"
+            return 1
         fi
     done
+
+    # Validate groups structure
+    local groups
+    if ! mapfile -t groups < <(yq eval '.groups | keys | .[]' "$yaml_file"); then
+        print_message "red" "Error: Failed to read groups from YAML file"
+        return 1
+    fi
+    
+    if (( ${#groups[@]} == 0 )); then
+        print_message "red" "Error: No package groups defined in YAML file"
+        return 1
+    fi
+    
+    local required_group_fields=("enabled" "packages" "description")
+    for group in "${groups[@]}"; do
+        for field in "${required_group_fields[@]}"; do
+            if ! yq eval ".groups.${group} | has(\"$field\")" "$yaml_file" | grep -q "true"; then
+                print_message "red" "Error: Group '$group' missing required field '$field'"
+                return 1
+            fi
+        done
+        
+        # Validate packages array is not empty
+        local package_count
+        package_count=$(yq eval ".groups.${group}.packages | length" "$yaml_file")
+        if (( package_count == 0 )); then
+            print_message "red" "Error: Group '$group' has no packages defined"
+            return 1
+        fi
+    done
+
+    # Validate shell_configs structure
+    local config_count
+    config_count=$(yq eval '.shell_configs | keys | length' "$yaml_file")
+    if (( config_count == 0 )); then
+        print_message "yellow" "Warning: No shell configurations defined in YAML file"
+    fi
+
+    return 0
+}
+
+# Function to load YAML configuration with validation and error handling
+load_yaml_config() {
+    local yaml_file="${1:-setup.yaml}"
+    
+    # Check yq installation
+    if ! command -v yq &> /dev/null; then
+        if ! command -v brew &> /dev/null; then
+            print_message "red" "Error: Homebrew is required to install yq"
+            return 1
+        fi
+        print_message "blue" "Installing yq for YAML parsing..."
+        if ! brew install yq; then
+            print_message "red" "Error: Failed to install yq"
+            return 1
+        fi
+    fi
+
+    # Validate YAML structure
+    print_message "blue" "Validating YAML configuration..."
+    if ! validate_yaml "$yaml_file"; then
+        return 1
+    fi
+
+    # Load group configurations with error handling
+    print_message "blue" "Loading package groups..."
+    local group enabled packages description
+    while IFS= read -r group; do
+        # Get group status
+        if ! enabled=$(yq eval ".groups.${group}.enabled" "$yaml_file"); then
+            print_message "red" "Error: Failed to read enabled status for group '$group'"
+            return 1
+        fi
+        GROUP_ENABLED[$group]="$enabled"
+        
+        # Get group description
+        if ! description=$(yq eval ".groups.${group}.description" "$yaml_file"); then
+            print_message "yellow" "Warning: Failed to read description for group '$group'"
+            description="No description available"
+        fi
+        GROUP_DESCRIPTIONS[$group]="$description"
+        
+        # Read packages as an array and join with spaces
+        if ! packages=$(yq eval ".groups.${group}.packages[]" "$yaml_file" | tr '\n' ' '); then
+            print_message "red" "Error: Failed to read packages for group '$group'"
+            return 1
+        fi
+        PACKAGE_GROUPS[$group]="${packages% }" # Remove trailing space
+        
+        # Log group loading
+        if [[ "${GROUP_ENABLED[$group]}" == "true" ]]; then
+            print_message "green" "Loaded group '$group' (enabled): $description"
+            print_message "blue" "  Packages: ${packages% }"
+        else
+            print_message "yellow" "Loaded group '$group' (disabled): $description"
+        fi
+    done < <(yq eval '.groups | keys | .[]' "$yaml_file")
+
+    # Load shell configurations with error handling
+    print_message "blue" "Loading shell configurations..."
+    local config_sections section config
+    if ! mapfile -t config_sections < <(yq eval '.shell_configs | keys | .[]' "$yaml_file"); then
+        print_message "red" "Error: Failed to read shell configuration sections"
+        return 1
+    fi
+    
+    for section in "${config_sections[@]}"; do
+        print_message "blue" "Loading configuration section: $section"
+        local config_count=0
+        while IFS= read -r config; do
+            if [[ -n "$config" ]]; then
+                SHELL_CONFIGS+=("$config")
+                ((config_count++))
+            fi
+        done < <(yq eval ".shell_configs.${section}[]" "$yaml_file")
+        print_message "green" "  Loaded $config_count configurations from section '$section'"
+    done
+
+    # Validate we have at least one enabled group
+    local enabled_count=0
+    for group in "${!GROUP_ENABLED[@]}"; do
+        if [[ "${GROUP_ENABLED[$group]}" == "true" ]]; then
+            ((enabled_count++))
+        fi
+    done
+
+    if (( enabled_count == 0 )); then
+        print_message "yellow" "Warning: No package groups are enabled"
+    else
+        print_message "green" "Successfully loaded $enabled_count enabled package groups"
+    fi
+
+    print_message "green" "Configuration loaded successfully"
+    return 0
+}
+
+# Function to get all enabled packages with validation
+get_enabled_packages() {
+    local enabled_packages=""
+    local group
+    
+    # Validate GROUP_ENABLED is populated
+    if (( ${#GROUP_ENABLED[@]} == 0 )); then
+        print_message "red" "Error: No groups defined in configuration"
+        return 1
+    fi
+    
+    # Get packages from enabled groups
+    local enabled_count=0
+    local package_count=0
+    # shellcheck disable=SC2296
+    for group in ${(k)GROUP_ENABLED}; do
+        if [[ "${GROUP_ENABLED[$group]}" == "true" ]]; then
+            ((enabled_count++))
+            if [[ -z "${PACKAGE_GROUPS[$group]}" ]]; then
+                print_message "yellow" "Warning: No packages defined for enabled group '$group'"
+                continue
+            fi
+            enabled_packages+=" ${PACKAGE_GROUPS[$group]}"
+            # Count packages in this group
+            package_count+=$(echo "${PACKAGE_GROUPS[$group]}" | wc -w)
+        fi
+    done
+    
+    # Validate we have packages to install
+    if [[ -z "${enabled_packages# }" ]]; then
+        if (( enabled_count > 0 )); then
+            print_message "red" "Error: Enabled groups contain no packages"
+        else
+            print_message "yellow" "Warning: No packages selected for installation"
+        fi
+        return 1
+    fi
+    
+    print_message "green" "Found $package_count packages in $enabled_count enabled groups"
+    
+    # Remove leading space and return
     echo "${enabled_packages# }"
 }
 
+# Load configuration from YAML file with error handling
+YAML_CONFIG="${SCRIPT_DIR:-$PWD}/setup.yaml"
+if ! load_yaml_config "$YAML_CONFIG"; then
+    print_message "red" "Failed to load configuration from $YAML_CONFIG"
+    exit 1
+fi
+
 # Set PACKAGES array based on enabled groups
-PACKAGES=($(get_enabled_packages))
+# shellcheck disable=SC2206,SC2296
+if ! PACKAGES=(${(f)$(get_enabled_packages)}); then
+    print_message "red" "Failed to process enabled packages"
+    exit 1
+fi
 
-# Shell configurations
-SHELL_CONFIGS=(
-    # Initialize Homebrew and set HOMEBREW_PREFIX
-    'if [ -x /opt/homebrew/bin/brew ]; then
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    elif [ -x /usr/local/bin/brew ]; then
-        eval "$(/usr/local/bin/brew shellenv)"
-    fi'
-    'export HOMEBREW_PREFIX="$(brew --prefix)"'
+# Final validation
+if (( ${#PACKAGES[@]} == 0 )); then
+    print_message "yellow" "Warning: No packages selected for installation"
+fi
 
-    # Ensure Homebrew bin is in PATH
-    'export PATH="$HOMEBREW_PREFIX/bin:$PATH"'
-
-    # Add GNU Make tools to PATH
-    'export PATH="$HOMEBREW_PREFIX/opt/make/libexec/gnubin:$PATH"'
-
-    # Initialize pyenv
-    'export PYENV_ROOT="$HOME/.pyenv"'
-    'export PATH="$PYENV_ROOT/bin:$PATH"'
-    'if command -v pyenv 1>/dev/null 2>&1; then
-        eval "$(pyenv init --path)"
-        eval "$(pyenv init -)"
-    fi'
-
-    # Initialize rbenv
-    'export PATH="$HOME/.rbenv/bin:$PATH"'
-    'if command -v rbenv 1>/dev/null 2>&1; then
-        eval "$(rbenv init - zsh)"
-    fi'
-
-    # Set up NVM
-    'export NVM_DIR="$HOME/.nvm"'
-    '[ -s "$HOMEBREW_PREFIX/opt/nvm/nvm.sh" ] && . "$HOMEBREW_PREFIX/opt/nvm/nvm.sh"'
-
-    # Add other necessary paths
-    'export PATH="$HOMEBREW_PREFIX/opt/sphinx-doc/bin:$PATH"'
-    'export PATH="$HOMEBREW_PREFIX/opt/openjdk/bin:$PATH"'
-    'export PATH="$HOMEBREW_PREFIX/opt/curl/bin:$PATH"'
-    'export PATH="$HOMEBREW_PREFIX/opt/qt@5/bin:$PATH"'
-
-    # Compiler flags
-    'export CPPFLAGS="-I$HOMEBREW_PREFIX/opt/openjdk/include -I$HOMEBREW_PREFIX/opt/curl/include -I$HOMEBREW_PREFIX/opt/qt@5/include"'
-    'export LDFLAGS="-L$HOMEBREW_PREFIX/opt/curl/lib -L$HOMEBREW_PREFIX/opt/qt@5/lib"'
-    'export PKG_CONFIG_PATH="$HOMEBREW_PREFIX/opt/curl/lib/pkgconfig:$HOMEBREW_PREFIX/opt/qt@5/lib/pkgconfig"'
-
-    # Add custom Zsh function path
-    'fpath+=~/.zfunc'
-
-    # Aliases
-    'alias c="clear"'
-
-    # Source Powerlevel10k theme
-    'if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k/powerlevel10k.zsh-theme" ]; then
-        source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k/powerlevel10k.zsh-theme"
-    fi'
-
-    # Load Powerlevel10k configuration if it exists
-    '[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh'
-)
+# Log configuration summary
+print_message "blue" "Configuration Summary:"
+print_message "blue" "  Total Groups: ${#GROUP_ENABLED[@]}"
+print_message "blue" "  Enabled Groups: $(print_r "${GROUP_ENABLED[@]}" | grep -c true)"
+print_message "blue" "  Total Packages: ${#PACKAGES[@]}"
+print_message "blue" "  Shell Configs: ${#SHELL_CONFIGS[@]}"

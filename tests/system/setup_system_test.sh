@@ -1,130 +1,196 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
+# shellcheck shell=bash
+# shellcheck disable=SC2296,SC2299,SC2300,SC2301,SC2128,SC2034,SC2154
 
-# Source test helper
-source "$(dirname "$0")/../test_helper.sh"
+source "${0:A:h}/../test_helper.sh"
 
-test_full_installation() {
-    echo "Testing full installation process..."
+# Test complete system setup with default configuration
+test_default_setup() {
+    # Create default YAML configuration
+    local yaml_content='
+packages:
+  brew:
+    - git
+    - zsh
+  cask:
+    - visual-studio-code
+environments:
+  core:
+    enabled: true
+    packages:
+      - git
+      - zsh
+'
+    local test_yaml="$TEST_WORKSPACE/setup.yaml"
+    echo "$yaml_content" > "$test_yaml"
     
-    # Create test environment
-    mkdir -p "$TEST_WORKSPACE/test_install"
-    cd "$TEST_WORKSPACE/test_install"
+    # Run complete setup
+    local result
+    result=$(./setup.zsh)
+    assert_equals 0 $? "Default setup should succeed"
+    assert_contains "$result" "Setting up core environment" "Should setup core environment"
     
-    # Copy all setup files
-    cp -r ../setup.zsh ../setup_config.sh ../setup_functions.sh ./
-    
-    # Mock system commands
-    mock_homebrew
-    mock_sudo_commands
-    mock_command "sw_vers" "12.0.0"
-    mock_command "uname" "Darwin"
-    mock_command "curl" "curl 7.79.1"
-    mock_command "git" "git version 2.33.0"
-    
-    # Run setup script with various flags
-    echo "Testing with default options..."
-    output=$(./setup.zsh)
-    assert_contains "$output" "Running setup.zsh version" "Should show version info"
-    
-    echo "Testing with verbose mode..."
-    output=$(./setup.zsh -v)
-    assert_contains "$output" "[debug]" "Should show debug output in verbose mode"
-    
-    echo "Testing with dry run mode..."
-    output=$(./setup.zsh -d)
-    assert_contains "$output" "[DRY-RUN]" "Should indicate dry run mode"
-    
-    echo "Testing with specific environment..."
-    output=$(./setup.zsh -e python)
-    assert_contains "$output" "python" "Should install Python environment"
+    # Verify installations
+    assert_directory_exists "$HOME/.oh-my-zsh" "Should install Oh My Zsh"
+    assert_file_exists "$HOME/.zshrc" "Should create .zshrc"
 }
 
-test_error_handling() {
-    echo "Testing error handling..."
+# Test environment-specific setup
+test_environment_specific_setup() {
+    # Create test configuration with multiple environments
+    local yaml_content='
+environments:
+  dev:
+    enabled: false
+    packages:
+      - git
+      - zsh
+  data:
+    enabled: false
+    packages:
+      - python
+      - r
+  web:
+    enabled: false
+    packages:
+      - node
+      - yarn
+'
+    local test_yaml="$TEST_WORKSPACE/setup.yaml"
+    echo "$yaml_content" > "$test_yaml"
     
-    # Test invalid option
-    output=$(./setup.zsh -z 2>&1) || true
-    assert_contains "$output" "Invalid option" "Should handle invalid options"
+    # Test enabling specific environment
+    local result
+    result=$(./setup.zsh -e dev)
+    assert_equals 0 $? "Environment-specific setup should succeed"
+    assert_contains "$result" "Enabling dev environment" "Should enable dev environment"
     
-    # Test invalid environment
-    output=$(./setup.zsh -e invalid_env 2>&1) || true
-    assert_contains "$output" "Unknown package group" "Should handle invalid environments"
-    
-    # Test running as root
-    EUID=0
-    output=$(./setup.zsh 2>&1) || true
-    assert_contains "$output" "should not be run as root" "Should prevent running as root"
+    # Verify only dev environment was set up
+    local config
+    config=$(cat "$test_yaml")
+    assert_contains "$config" "dev:\n    enabled: true" "Should enable dev environment"
+    assert_contains "$config" "data:\n    enabled: false" "Should not enable data environment"
 }
 
-test_idempotency() {
-    echo "Testing idempotent installation..."
+# Test parallel installation performance
+test_parallel_installation() {
+    # Create configuration with many packages
+    local yaml_content='
+packages:
+  brew:
+    - git
+    - zsh
+    - wget
+    - curl
+    - jq
+  cask:
+    - visual-studio-code
+    - iterm2
+    - firefox
+environments:
+  dev:
+    enabled: true
+    packages:
+      - git
+      - zsh
+      - wget
+'
+    local test_yaml="$TEST_WORKSPACE/setup.yaml"
+    echo "$yaml_content" > "$test_yaml"
     
-    # Run setup twice
-    ./setup.zsh -e core > /dev/null
-    output=$(./setup.zsh -e core)
+    # Time parallel installation
+    local start_time end_time duration
+    start_time=$(date +%s)
+    ./setup.zsh
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
     
-    # Verify no duplicate installations
-    assert_contains "$output" "already installed" "Should detect existing installations"
-    
-    # Check .zshrc for duplicates
-    if [[ -f "$HOME/.zshrc" ]]; then
-        duplicates=$(grep -c "HOMEBREW_PREFIX" "$HOME/.zshrc")
-        assert_equals "1" "$duplicates" "Should not duplicate shell configurations"
-    fi
+    # Verify reasonable completion time (under 5 minutes)
+    assert_equals 0 $((duration < 300)) "Parallel installation should complete in reasonable time"
 }
 
-test_environment_isolation() {
-    echo "Testing environment isolation..."
+# Test error recovery and resilience
+test_error_recovery() {
+    # Create invalid configuration
+    echo "invalid: yaml: content:" > "$TEST_WORKSPACE/setup.yaml"
     
-    # Test Python environment
-    output=$(./setup.zsh -e python)
-    assert_contains "$output" "pyenv" "Should install Python version manager"
-    assert_not_contains "$output" "java" "Should not install Java packages"
+    # Test setup with invalid configuration
+    local result
+    result=$(./setup.zsh 2>&1) || true
+    assert_contains "$result" "ERROR" "Should log error for invalid configuration"
+    assert_contains "$result" "Attempting to recover" "Should attempt recovery"
     
-    # Test Java environment
-    output=$(./setup.zsh -e java)
-    assert_contains "$output" "java" "Should install Java"
-    assert_not_contains "$output" "pyenv" "Should not install Python packages"
+    # Test recovery by creating valid configuration
+    local yaml_content='
+packages:
+  brew:
+    - git
+environments:
+  core:
+    enabled: true
+    packages:
+      - git
+'
+    echo "$yaml_content" > "$TEST_WORKSPACE/setup.yaml"
+    
+    result=$(./setup.zsh)
+    assert_equals 0 $? "Should recover and complete setup"
 }
 
-test_cleanup() {
-    echo "Testing cleanup on failure..."
+# Test command line options
+test_command_line_options() {
+    # Test help option
+    local result
+    result=$(./setup.zsh -h)
+    assert_contains "$result" "Usage:" "Should show usage information"
     
-    # Simulate failure during installation
-    mock_command "brew" "exit 1"
+    # Test list environments option
+    result=$(./setup.zsh -l)
+    assert_contains "$result" "Available environments:" "Should list available environments"
     
-    # Run setup and capture output
-    output=$(./setup.zsh 2>&1) || true
+    # Test verbose output
+    result=$(./setup.zsh -v)
+    assert_contains "$result" "DEBUG:" "Should show verbose output"
     
-    # Verify error handling and cleanup
-    assert_contains "$output" "error" "Should show error message"
-    assert_not_contains "$(ps aux)" "brew" "Should not leave hanging processes"
+    # Test dry run
+    result=$(./setup.zsh -d)
+    assert_contains "$result" "[DRY-RUN]" "Should indicate dry run mode"
 }
 
-# Additional assertion for system tests
-assert_not_contains() {
-    local haystack="$1"
-    local needle="$2"
-    local message="${3:-}"
+# Test system integration
+test_system_integration() {
+    # Test shell integration
+    local result
+    result=$(./setup.zsh)
+    assert_equals 0 $? "System setup should succeed"
     
-    if [[ "$haystack" != *"$needle"* ]]; then
-        echo -e "${GREEN}✓ PASS${NC} - $message"
-        return 0
-    else
-        echo -e "${RED}✗ FAIL${NC} - $message"
-        echo "  Expected not to find: $needle"
-        echo "  In: $haystack"
-        return 1
-    fi
+    # Verify shell configuration
+    assert_file_exists "$HOME/.zshrc" "Should create shell configuration"
+    local zshrc_content
+    zshrc_content=$(cat "$HOME/.zshrc")
+    assert_contains "$zshrc_content" "oh-my-zsh" "Should configure Oh My Zsh"
+    assert_contains "$zshrc_content" "plugins=" "Should configure shell plugins"
+    
+    # Verify Homebrew integration
+    assert_contains "$(command -v brew)" "brew" "Should have Homebrew in PATH"
 }
 
 # Run all tests
-main() {
-    test_full_installation
-    test_error_handling
-    test_idempotency
-    test_environment_isolation
-    test_cleanup
+run_tests() {
+    # Setup test environment
+    setup
+    
+    # Run individual test functions
+    test_default_setup
+    test_environment_specific_setup
+    test_parallel_installation
+    test_error_recovery
+    test_command_line_options
+    test_system_integration
+    
+    # Cleanup test environment
+    teardown
 }
 
-main 
+# Execute tests
+run_tests

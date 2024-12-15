@@ -5,42 +5,145 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
+  workflow_dispatch:      # Allow manual trigger
 
 jobs:
   test:
     runs-on: macos-latest
+    defaults:
+      run:
+        shell: zsh {0}
     
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Install dependencies
+      shell: bash
+      run: |
+        brew install zsh
+        # Make zsh the default shell for the workflow
+        sudo chsh -s $(brew --prefix)/bin/zsh $(whoami)
+        # Ensure we're running in zsh
+        exec zsh
     
     - name: Set up test environment
       run: |
-        chmod +x tests/run_tests.sh
-        chmod +x tests/unit/setup_functions_test.sh
-        chmod +x tests/integration/setup_integration_test.sh
-        chmod +x tests/system/setup_system_test.sh
+        # Create test directories if they don't exist
+        for dir in unit integration system; do
+          [[ -d "tests/$dir" ]] || mkdir -p "tests/$dir"
+        done
+        
+        # Make test files executable if they exist
+        for test_file in tests/run_tests.sh tests/{unit,integration,system}/*_test.sh; do
+          [[ -f "$test_file" ]] && chmod +x "$test_file"
+        done
+        
+        # Create mock home directory structure
+        mkdir -p "$HOME/.oh-my-zsh/custom/themes"
+        touch "$HOME/.zshrc"
+        
+        # Set up test environment variables
+        echo "TEST_MODE=true" >> $GITHUB_ENV
+        echo "RUNNING_TESTS=true" >> $GITHUB_ENV
     
     - name: Run tests
       run: |
-        ./tests/run_tests.sh
+        # Run the test suite with error handling
+        if ! ./tests/run_tests.sh; then
+          echo "::error::Tests failed"
+          exit 1
+        fi
         
     - name: Update test status badge
-      if: success()
+      if: success() && github.event_name == 'push'
       run: |
-        sed -i '' '/!\[Tests\]/d' README.md
-        sed -i '' '/<div align="center">/a\'$'\n''[![Tests](https://github.com/${{ github.repository }}/actions/workflows/test.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/test.yml)\'$'\n' README.md
+        # Update badge in README
+        local readme="README.md"
+        if [[ -f "$readme" ]]; then
+          sed -i.bak '/!\[Tests\]/d' "$readme"
+          sed -i.bak '/<div align="center">/a\'$'\n''[![Tests](https://github.com/${{ github.repository }}/actions/workflows/test.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/test.yml)\'$'\n' "$readme"
+          rm -f "${readme}.bak"
+        else
+          echo "::warning::README.md not found"
+        fi
       
     - name: Commit README changes
       if: success() && github.event_name == 'push'
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add README.md
-        git diff --quiet && git diff --staged --quiet || git commit -m "docs: update test status badge [skip ci]"
+        # Configure git
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
         
-    - name: Push changes
-      if: success() && github.event_name == 'push'
-      uses: ad-m/github-push-action@master
+        # Check if there are changes to commit
+        if ! git diff --quiet README.md; then
+          git add README.md
+          git commit -m "docs: update test status badge [skip ci]"
+          git push
+        else
+          echo "No changes to commit"
+        fi
+
+  update-deps:
+    needs: test
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: zsh {0}
+    
+    steps:
+    - uses: actions/checkout@v3
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: main 
+        fetch-depth: 0
+    
+    - name: Set up Homebrew
+      run: |
+        brew update
+        brew analytics off
+        
+    - name: Check for outdated packages
+      id: check-outdated
+      run: |
+        # Get list of outdated packages
+        local outdated
+        if outdated=$(brew outdated); then
+          if [[ -n "$outdated" ]]; then
+            {
+              echo "outdated=true"
+              echo "packages<<EOF"
+              echo "$outdated"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          else
+            echo "No outdated packages found"
+          fi
+        else
+          echo "::error::Failed to check for outdated packages"
+          exit 1
+        fi
+        
+    - name: Create Pull Request
+      if: steps.check-outdated.outputs.outdated == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore: update homebrew package versions"
+        title: "chore: update homebrew packages"
+        body: |
+          This PR updates the following Homebrew packages to their latest versions:
+          
+          ```
+          ${{ steps.check-outdated.outputs.packages }}
+          ```
+          
+          This is an automated update triggered by the weekly dependency check.
+        branch: update-deps
+        base: main
+        delete-branch: true
+        labels: |
+          dependencies
+          automated pr
