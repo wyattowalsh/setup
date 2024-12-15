@@ -1,211 +1,292 @@
 #!/usr/bin/env zsh
-# shellcheck shell=bash
-# shellcheck disable=SC2296,SC2299,SC2300,SC2301
 
-###################################################
-# Main setup script for macOS development environment
-###################################################
+# Terminal colors and styles
+typeset -r BOLD='\033[1m'
+typeset -r DIM='\033[2m'
+typeset -r ITALIC='\033[3m'
+typeset -r UNDERLINE='\033[4m'
+typeset -r RED='\033[0;31m'
+typeset -r GREEN='\033[0;32m'
+typeset -r YELLOW='\033[0;33m'
+typeset -r BLUE='\033[0;34m'
+typeset -r MAGENTA='\033[0;35m'
+typeset -r CYAN='\033[0;36m'
+typeset -r WHITE='\033[0;37m'
+typeset -r NC='\033[0m'
 
-# Set strict error handling
-setopt ERR_EXIT
-setopt PIPE_FAIL
-setopt NO_UNSET
+# Unicode symbols for better formatting
+typeset -r CHECK_MARK="✓"
+typeset -r CROSS_MARK="✗"
+typeset -r ARROW="→"
+typeset -r BULLET="•"
+typeset -r GEAR="⚙️"
+typeset -r PACKAGE="📦"
+typeset -r TOOLS="🛠"
+typeset -r ROCKET="🚀"
+typeset -r WARNING="⚠️"
+typeset -r INFO="ℹ️"
 
-# Set script version
-SCRIPT_VERSION="2.0.0"
+# Progress spinner frames
+typeset -a SPINNER_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 
-# Get the directory where the script is located
-SCRIPT_DIR="${0:A:h}"
+# Verbose mode flag
+typeset -i VERBOSE=0
 
-# Set up cleanup trap
-cleanup() {
+# Dry run mode flag
+typeset -i DRY_RUN=0
+
+# Log levels
+typeset -r LOG_DEBUG=0
+typeset -r LOG_INFO=1
+typeset -r LOG_WARN=2
+typeset -r LOG_ERROR=3
+
+# Current log level
+typeset -i CURRENT_LOG_LEVEL=$LOG_INFO
+
+# Print a formatted header
+print_header() {
+    local text="$1"
+    local width=60
+    local padding=$(( (width - ${#text}) / 2 ))
+    
+    echo
+    printf '%s\n' "${BLUE}${BOLD}${UNDERLINE}%${width}s${NC}" " "
+    printf '%s\n' "${BLUE}${BOLD}%$((padding))s%s%$((width - padding - ${#text}))s${NC}" " " "$text" " "
+    printf '%s\n' "${BLUE}${BOLD}${UNDERLINE}%${width}s${NC}" " "
+    echo
+}
+
+# Print a section header
+print_section() {
+    local text="$1"
+    local symbol="${2:-$BULLET}"
+    echo
+    printf '%s\n' "${CYAN}${BOLD}$symbol %s${NC}" "$text"
+    echo
+}
+
+# Print a task status
+print_task() {
+    local text="$1"
+    local status="$2"
+    local color="$3"
+    printf '%s %s\n' "${color}${status}${NC}" "$text"
+}
+
+# Show a spinner while running a command
+show_spinner() {
+    local pid=$1
+    local message="$2"
+    local i=0
+    
+    tput civis # Hide cursor
+    while kill -0 $pid 2>/dev/null; do
+        local frame="${SPINNER_FRAMES[$((i % ${#SPINNER_FRAMES[@]} + 1))]}"
+        printf '\r%s %s %s' "${BLUE}${frame}${NC}" "$message" "${DIM}...${NC}"
+        i=$((i + 1))
+        sleep 0.1
+    done
+    tput cnorm # Show cursor
+    printf '\r'
+}
+
+# Log a message with a specific level
+log() {
+    local level=$1
+    local message="$2"
+    local symbol="$3"
+    
+    if (( level >= CURRENT_LOG_LEVEL )); then
+        case $level in
+            $LOG_DEBUG)
+                [[ $VERBOSE -eq 1 ]] && printf '%s\n' "${DIM}${symbol} %s${NC}" "$message"
+                ;;
+            $LOG_INFO)
+                printf '%s\n' "${symbol} %s" "$message"
+                ;;
+            $LOG_WARN)
+                printf '%s\n' "${YELLOW}${symbol} %s${NC}" "$message"
+                ;;
+            $LOG_ERROR)
+                printf '%s\n' "${RED}${symbol} %s${NC}" "$message"
+                ;;
+        esac
+    fi
+}
+
+# Log debug message
+debug() { log $LOG_DEBUG "$1" "$INFO" }
+
+# Log info message
+info() { log $LOG_INFO "$1" "$INFO" }
+
+# Log warning message
+warn() { log $LOG_WARN "$1" "$WARNING" }
+
+# Log error message
+error() { log $LOG_ERROR "$1" "$CROSS_MARK" }
+
+# Show success message
+success() { print_task "$1" "$CHECK_MARK" "$GREEN" }
+
+# Show progress message
+progress() {
+    local message="$1"
+    local temp_file=$(mktemp)
+    
+    # Start the command in background
+    eval "$2" > "$temp_file" 2>&1 &
+    local pid=$!
+    
+    # Show spinner while command runs
+    show_spinner $pid "$message"
+    
+    # Check if command succeeded
+    wait $pid
     local exit_code=$?
-    print_message "blue" "Cleaning up..."
     
-    # Remove any temporary files or directories here
-    rm -rf "${SCRIPT_DIR}/.tmp" 2>/dev/null
-    
-    # Report final status
-    if (( exit_code == 0 )); then
-        print_message "green" "Setup completed successfully"
+    if [[ $exit_code -eq 0 ]]; then
+        success "$message"
+        [[ $VERBOSE -eq 1 ]] && cat "$temp_file"
     else
-        print_message "red" "Setup failed with exit code $exit_code"
+        error "$message"
+        cat "$temp_file"
     fi
     
-    exit "$exit_code"
+    rm -f "$temp_file"
+    return $exit_code
 }
 
-# Set up signal handlers
-handle_signal() {
-    local signal=$1
-    print_message "yellow" "Received signal: $signal"
-    cleanup
+# Print help message
+print_help() {
+    cat << EOF
+${BOLD}Usage:${NC} ./setup.zsh [options]
+
+${BOLD}Options:${NC}
+  ${BLUE}-h, --help${NC}         Show this help message
+  ${BLUE}-v, --verbose${NC}      Enable verbose output
+  ${BLUE}-d, --dry-run${NC}      Show what would be done without making changes
+  ${BLUE}-e, --enable${NC}       Enable specific environment (can be used multiple times)
+  ${BLUE}-x, --disable${NC}      Disable specific environment (can be used multiple times)
+  ${BLUE}-l, --list${NC}         List available environments
+  ${BLUE}-s, --skip-update${NC}  Skip updating existing packages
+
+${BOLD}Examples:${NC}
+  ${DIM}# Run setup with default settings${NC}
+  ./setup.zsh
+
+  ${DIM}# Enable specific environments${NC}
+  ./setup.zsh -e python -e node
+
+  ${DIM}# Run in verbose mode${NC}
+  ./setup.zsh -v
+
+  ${DIM}# Show what would be done${NC}
+  ./setup.zsh -d
+
+EOF
 }
 
-# Register cleanup and signal handlers
-trap cleanup EXIT
-trap 'handle_signal INT' INT
-trap 'handle_signal TERM' TERM
+# Print welcome message
+print_welcome() {
+    cat << EOF
 
-# Function to check system requirements
-check_system_requirements() {
-    # Check macOS version
-    local macos_version
-    macos_version=$(sw_vers -productVersion)
-    local min_version="10.15"
-    
-    if [[ "$(printf '%s\n' "$min_version" "$macos_version" | sort -V | head -n1)" != "$min_version" ]]; then
-        print_message "red" "This script requires macOS $min_version or later. You have $macos_version"
-        return 1
-    fi
-    
-    # Check available disk space (need at least 10GB)
-    local available_space
-    available_space=$(df -h / | awk 'NR==2 {print $4}' | sed 's/[^0-9.]//g')
-    if (( $(echo "$available_space < 10" | bc -l) )); then
-        print_message "red" "Insufficient disk space. Need at least 10GB, have ${available_space}GB"
-        return 1
-    fi
-    
-    # Check internet connectivity
-    if ! curl -s --connect-timeout 5 "https://api.github.com" >/dev/null; then
-        print_message "red" "No internet connectivity"
-        return 1
-    fi
-    
-    # Check if running on Apple Silicon or Intel
-    local arch
-    arch=$(uname -m)
-    print_message "blue" "Detected architecture: $arch"
-    if [[ "$arch" == "arm64" ]]; then
-        print_message "blue" "Running on Apple Silicon"
-    else
-        print_message "blue" "Running on Intel"
-    fi
-    
-    return 0
+${BLUE}${BOLD}🖥️  macOS Development Environment Setup${NC}
+${DIM}Automated setup for a productive development environment${NC}
+
+EOF
 }
 
-# Function to verify script dependencies
-verify_dependencies() {
-    local missing_deps=()
-    local dep
-    
-    for dep in curl git bc; do
-        if ! command -v "$dep" >/dev/null 2>&1; then
-            missing_deps+=("$dep")
-        fi
-    done
-    
-    if (( ${#missing_deps[@]} > 0 )); then
-        print_message "red" "Missing required dependencies: ${missing_deps[*]}"
-        print_message "yellow" "Please install the missing dependencies and try again"
-        return 1
-    fi
-    
-    return 0
+# Print completion message
+print_completion() {
+    local duration=$1
+    cat << EOF
+
+${GREEN}${BOLD}${ROCKET} Setup completed successfully!${NC}
+${DIM}Duration: ${duration} seconds${NC}
+
+${BOLD}Next steps:${NC}
+${BULLET} Restart your terminal to apply all changes
+${BULLET} Run ${ITALIC}p10k configure${NC} to customize your prompt
+${BULLET} Check the README for more customization options
+
+EOF
 }
 
-# Source required files with error handling
-source_required_files() {
-    local file
-    for file in setup_functions.sh setup_config.sh; do
-        local filepath="${SCRIPT_DIR}/${file}"
-        if [[ ! -f "$filepath" ]]; then
-            print_message "red" "Required file not found: $file"
-            return 1
-        fi
-        
-        if ! source "$filepath"; then
-            print_message "red" "Failed to source $file"
-            return 1
-        fi
-    done
-    return 0
-}
-
-# Function to parse command line arguments
-parse_arguments() {
-    local opt OPTIND
-    while getopts ":vh" opt; do
-        case ${opt} in
-            v)
-                print_message "blue" "Script version: $SCRIPT_VERSION"
-                return 1
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                print_help
+                exit 0
                 ;;
-            h)
-                print_message "blue" "Usage: $0 [-v] [-h]"
-                print_message "blue" "  -v: Print version"
-                print_message "blue" "  -h: Show this help message"
-                return 1
+            -v|--verbose)
+                VERBOSE=1
+                CURRENT_LOG_LEVEL=$LOG_DEBUG
+                shift
                 ;;
-            \?)
-                print_message "red" "Invalid option: -$OPTARG"
-                return 1
+            -d|--dry-run)
+                DRY_RUN=1
+                shift
                 ;;
-            :)
-                print_message "red" "Option -$OPTARG requires an argument"
-                return 1
+            -e|--enable)
+                enable_environment "$2"
+                shift 2
+                ;;
+            -x|--disable)
+                disable_environment "$2"
+                shift 2
+                ;;
+            -l|--list)
+                list_environments
+                exit 0
+                ;;
+            -s|--skip-update)
+                SKIP_UPDATE=1
+                shift
+                ;;
+            *)
+                error "Unknown option: $1"
+                print_help
+                exit 1
                 ;;
         esac
     done
-    return 0
 }
 
-# Main script execution
+# Main function
 main() {
-    print_message "blue" "Starting setup (version $SCRIPT_VERSION)"
+    local start_time=$SECONDS
     
-    # Create temporary directory
-    mkdir -p "${SCRIPT_DIR}/.tmp"
+    print_welcome
+    parse_args "$@"
     
-    # Process command line arguments
-    if ! parse_arguments "$@"; then
-        return $?
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "${WARNING} Running in dry-run mode. No changes will be made."
+        echo
     fi
     
-    # Check if running as root
-    if [[ "$EUID" -eq 0 ]]; then
-        print_message "red" "This script should not be run as root"
-        return 1
-    fi
+    print_section "System Check" "$GEAR"
+    progress "Checking system compatibility" "check_macos_compatibility"
+    progress "Checking user privileges" "check_user_privileges"
+    progress "Checking dependencies" "check_dependencies"
     
-    # Check system requirements
-    print_message "blue" "Checking system requirements..."
-    if ! check_system_requirements; then
-        print_message "red" "System requirements not met"
-        return 1
-    fi
+    print_section "Package Manager" "$PACKAGE"
+    progress "Installing/updating Homebrew" "install_or_update_homebrew"
     
-    # Verify dependencies
-    print_message "blue" "Verifying dependencies..."
-    if ! verify_dependencies; then
-        print_message "red" "Missing required dependencies"
-        return 1
-    fi
+    print_section "Environment Setup" "$TOOLS"
+    setup_enabled_environments
     
-    # Source required files
-    print_message "blue" "Loading required files..."
-    if ! source_required_files; then
-        print_message "red" "Failed to load required files"
-        return 1
-    fi
+    print_section "Shell Configuration" "$GEAR"
+    progress "Installing Oh My Zsh" "install_oh_my_zsh"
+    progress "Installing Powerlevel10k theme" "install_powerlevel10k"
+    progress "Configuring shell" "configure_shell"
     
-    # Run the main setup
-    print_message "blue" "Running main setup..."
-    if ! setup_environment; then
-        print_message "red" "Setup failed"
-        return 1
-    fi
-    
-    print_message "green" "Setup completed successfully"
-    print_message "yellow" "Please restart your terminal or run 'source ~/.zshrc' to apply changes"
-    return 0
+    local duration=$((SECONDS - start_time))
+    print_completion $duration
 }
 
-# Run main function with proper error handling
-if ! main "$@"; then
-    exit 1
-fi
-
-exit 0
+# Run main function
+main "$@"

@@ -23,16 +23,16 @@
 <summary><b>Core Development Tools</b></summary>
 
 Essential tools for any development workflow:
-- `gcc` - GNU Compiler Collection
-- `git` - Version control system
-- `gh` - GitHub CLI
-- `make` - Build automation tool
-- `tree` - Directory structure viewer
-- `wget` - File retrieval utility
-- `zsh` - Z shell
-- `zsh-completions` - Additional completions for Zsh
-- `visual-studio-code` - Code editor
-- `github` - GitHub desktop client
+- \`gcc\` - GNU Compiler Collection
+- \`git\` - Version control system
+- \`gh\` - GitHub CLI
+- \`make\` - Build automation tool
+- \`tree\` - Directory structure viewer
+- \`wget\` - File retrieval utility
+- \`zsh\` - Z shell
+- \`zsh-completions\` - Additional completions for Zsh
+- \`visual-studio-code\` - Code editor
+- \`github\` - GitHub desktop client
 
 </details>
 
@@ -40,23 +40,23 @@ Essential tools for any development workflow:
 <summary><b>Language Environments</b></summary>
 
 ### Python Environment
-- `pyenv` - Python version management
-- `poetry` - Dependency management
-- `miniconda` - Data science distribution
-- `jupyter-notebook-ql` - Notebook previews
-- `sphinx-doc` - Documentation generator
+- \`pyenv\` - Python version management
+- \`poetry\` - Dependency management
+- \`miniconda\` - Data science distribution
+- \`jupyter-notebook-ql\` - Notebook previews
+- \`sphinx-doc\` - Documentation generator
 
 ### Java Environment
-- `java` - JDK installation
-- `graphviz` - Graph visualization
+- \`java\` - JDK installation
+- \`graphviz\` - Graph visualization
 
 ### Ruby Environment
-- `rbenv` - Ruby version management
-- `ruby-build` - Ruby installation
+- \`rbenv\` - Ruby version management
+- \`ruby-build\` - Ruby installation
 
 ### Node.js Environment
-- `nvm` - Node version management
-- `watchman` - File watching service
+- \`nvm\` - Node version management
+- \`watchman\` - File watching service
 
 </details>
 
@@ -64,23 +64,23 @@ Essential tools for any development workflow:
 <summary><b>Specialized Environments</b></summary>
 
 ### Docker Environment
-- `docker` - Container runtime
-- `docker-compose` - Multi-container orchestration
-- `docker-completion` - Shell completions
+- \`docker\` - Container runtime
+- \`docker-compose\` - Multi-container orchestration
+- \`docker-completion\` - Shell completions
 
 ### R Statistical Environment
-- `r` - R language and environment
+- \`r\` - R language and environment
 
 ### Web Development
-- `google-chrome` - Web browser
-- `responsively` - Responsive design testing
-- `quicklook-csv` - CSV file previews
-- `qlmarkdown` - Markdown previews
-- `webpquicklook` - WebP image previews
+- \`google-chrome\` - Web browser
+- \`responsively\` - Responsive design testing
+- \`quicklook-csv\` - CSV file previews
+- \`qlmarkdown\` - Markdown previews
+- \`webpquicklook\` - WebP image previews
 
 ### Data Science
-- `db-browser-for-sqlite` - Database management
-- `jupyter-notebook-ql` - Notebook integration
+- \`db-browser-for-sqlite\` - Database management
+- \`jupyter-notebook-ql\` - Notebook integration
 
 </details>
 
@@ -88,22 +88,22 @@ Essential tools for any development workflow:
 <summary><b>Support Tools</b></summary>
 
 ### Writing & Documentation
-- `mark-text` - Markdown editor
-- `notion` - Note-taking and collaboration
-- `obsidian` - Knowledge base
-- `zotero` - Reference management
+- \`mark-text\` - Markdown editor
+- \`notion\` - Note-taking and collaboration
+- \`obsidian\` - Knowledge base
+- \`zotero\` - Reference management
 
 ### Media
-- `iina` - Media player
-- `spotify` - Music streaming
+- \`iina\` - Media player
+- \`spotify\` - Music streaming
 
 ### System Utilities
-- `glance` - Quick file preview
-- `google-drive` - Cloud storage
-- `logi-options+` - Logitech device manager
-- `slack` - Team communication
-- `speedtest-cli` - Network speed test
-- `unar` - Archive extraction
+- \`glance\` - Quick file preview
+- \`google-drive\` - Cloud storage
+- \`logi-options+\` - Logitech device manager
+- \`slack\` - Team communication
+- \`speedtest-cli\` - Network speed test
+- \`unar\` - Archive extraction
 
 </details>
 
@@ -111,25 +111,25 @@ Essential tools for any development workflow:
 <summary><b>Font Collection</b></summary>
 
 ### System Fonts
-- `font-sf-pro` - San Francisco Pro
-- `font-sf-compact` - San Francisco Compact
-- `font-sf-mono` - San Francisco Mono
-- `font-new-york` - New York serif
+- \`font-sf-pro\` - San Francisco Pro
+- \`font-sf-compact\` - San Francisco Compact
+- \`font-sf-mono\` - San Francisco Mono
+- \`font-new-york\` - New York serif
 
 ### Development Fonts
-- `font-fira-code` - Programming ligatures
-- `font-montserrat` - Modern sans-serif
+- \`font-fira-code\` - Programming ligatures
+- \`font-montserrat\` - Modern sans-serif
 
 ### Icon Fonts
-- `font-fontawesome` - FontAwesome icons
-- `font-awesome-terminal-fonts` - Terminal icons
-- `font-academicons` - Academic icons
-- `font-devicons` - Development icons
-- `font-foundation-icons` - Foundation icons
-- `font-material-design-icons-webfont` - Material Design web font
-- `font-material-icons` - Material Design icons
-- `font-mynaui-icons` - Myna UI icons
-- `font-simple-line-icons` - Simple line icons
+- \`font-fontawesome\` - FontAwesome icons
+- \`font-awesome-terminal-fonts\` - Terminal icons
+- \`font-academicons\` - Academic icons
+- \`font-devicons\` - Development icons
+- \`font-foundation-icons\` - Foundation icons
+- \`font-material-design-icons-webfont\` - Material Design web font
+- \`font-material-icons\` - Material Design icons
+- \`font-mynaui-icons\` - Myna UI icons
+- \`font-simple-line-icons\` - Simple line icons
 
 </details>
 
@@ -139,24 +139,24 @@ Essential tools for any development workflow:
 > Before running the script, make sure you have administrative privileges on your Mac.
 
 1. **Clone and Navigate**
-   ```bash
+   \`\`\`bash
    git clone https://gist.github.com/03cb9559dc981a69d410e3ff5ee085fb.git mac_setup
    cd mac_setup
-   ```
+   \`\`\`
 
 2. **Make Executable**
-   ```bash
+   \`\`\`bash
    chmod +x setup.zsh
-   ```
+   \`\`\`
 
 3. **Customize (Optional)**
-   ```bash
+   \`\`\`bash
    # Edit setup_config.sh to enable/disable environments
    vim setup_config.sh
-   ```
+   \`\`\`
 
 4. **Run Setup**
-   ```bash
+   \`\`\`bash
    # View available environments
    ./setup.zsh -l
    
@@ -165,7 +165,7 @@ Essential tools for any development workflow:
    
    # Run with all enabled environments
    ./setup.zsh
-   ```
+   \`\`\`
 
 > [!WARNING]
 > The script will require sudo access for some operations. Always review scripts before running them with elevated privileges.
@@ -174,17 +174,17 @@ Essential tools for any development workflow:
 
 | Option | Description |
 |--------|-------------|
-| `-l` | List all available environment groups |
-| `-e GROUP` | Enable a specific environment group |
-| `-x GROUP` | Disable a specific environment group |
-| `-v` | Enable verbose output |
-| `-d` | Dry run (show what would be installed) |
-| `-s` | Skip updating existing packages |
-| `-h` | Show help message |
+| \`-l\` | List all available environment groups |
+| \`-e GROUP\` | Enable a specific environment group |
+| \`-x GROUP\` | Disable a specific environment group |
+| \`-v\` | Enable verbose output |
+| \`-d\` | Dry run (show what would be installed) |
+| \`-s\` | Skip updating existing packages |
+| \`-h\` | Show help message |
 
 ## 📦 File Structure
 
-```
+\`\`\`
 📁 mac_setup/
 ├── 📄 README.md              # Documentation
 ├── 📄 setup.zsh             # Main setup script
@@ -196,7 +196,7 @@ Essential tools for any development workflow:
     ├── 📁 unit/            # Unit tests
     ├── 📁 integration/     # Integration tests
     └── 📁 system/          # System tests
-```
+\`\`\`
 
 ## 🧪 Testing
 
@@ -204,7 +204,7 @@ The project includes a comprehensive test suite covering unit, integration, and 
 
 ### Running Tests Locally
 
-```bash
+\`\`\`bash
 # Run all tests
 ./tests/run_tests.sh
 
@@ -212,7 +212,7 @@ The project includes a comprehensive test suite covering unit, integration, and 
 ./tests/unit/setup_functions_test.sh
 ./tests/integration/setup_integration_test.sh
 ./tests/system/setup_system_test.sh
-```
+\`\`\`
 
 ### Test Coverage
 
@@ -226,9 +226,9 @@ The project includes a comprehensive test suite covering unit, integration, and 
 > [!CAUTION]
 > This will remove any existing mac_setup directory before installation.
 
-```bash
+\`\`\`bash
 cd && rm -rf mac_setup && git clone https://gist.github.com/03cb9559dc981a69d410e3ff5ee085fb.git mac_setup && cd mac_setup && chmod +x setup.zsh && ./setup.zsh -v
-```
+\`\`\`
 
 ## 🤝 Contributing
 

@@ -1,13 +1,15 @@
-name: Test and Update
+name: Tests
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  schedule:
-    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
   workflow_dispatch:      # Allow manual trigger
+
+permissions:
+  contents: write       # Needed for updating badges
+  checks: write        # Needed for test reporting
 
 jobs:
   test:
@@ -57,93 +59,3 @@ jobs:
           echo "::error::Tests failed"
           exit 1
         fi
-        
-    - name: Update test status badge
-      if: success() && github.event_name == 'push'
-      run: |
-        # Update badge in README
-        local readme="README.md"
-        if [[ -f "$readme" ]]; then
-          sed -i.bak '/!\[Tests\]/d' "$readme"
-          sed -i.bak '/<div align="center">/a\'$'\n''[![Tests](https://github.com/${{ github.repository }}/actions/workflows/test.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/test.yml)\'$'\n' "$readme"
-          rm -f "${readme}.bak"
-        else
-          echo "::warning::README.md not found"
-        fi
-      
-    - name: Commit README changes
-      if: success() && github.event_name == 'push'
-      run: |
-        # Configure git
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        
-        # Check if there are changes to commit
-        if ! git diff --quiet README.md; then
-          git add README.md
-          git commit -m "docs: update test status badge [skip ci]"
-          git push
-        else
-          echo "No changes to commit"
-        fi
-
-  update-deps:
-    needs: test
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: macos-latest
-    defaults:
-      run:
-        shell: zsh {0}
-    
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-    
-    - name: Set up Homebrew
-      run: |
-        brew update
-        brew analytics off
-        
-    - name: Check for outdated packages
-      id: check-outdated
-      run: |
-        # Get list of outdated packages
-        local outdated
-        if outdated=$(brew outdated); then
-          if [[ -n "$outdated" ]]; then
-            {
-              echo "outdated=true"
-              echo "packages<<EOF"
-              echo "$outdated"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-          else
-            echo "No outdated packages found"
-          fi
-        else
-          echo "::error::Failed to check for outdated packages"
-          exit 1
-        fi
-        
-    - name: Create Pull Request
-      if: steps.check-outdated.outputs.outdated == 'true'
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "chore: update homebrew package versions"
-        title: "chore: update homebrew packages"
-        body: |
-          This PR updates the following Homebrew packages to their latest versions:
-          
-          ```
-          ${{ steps.check-outdated.outputs.packages }}
-          ```
-          
-          This is an automated update triggered by the weekly dependency check.
-        branch: update-deps
-        base: main
-        delete-branch: true
-        labels: |
-          dependencies
-          automated pr

@@ -32,6 +32,9 @@ typeset -a SKIPPED_TESTS_LIST=()
 typeset -r IS_GITHUB_ACTIONS="${GITHUB_ACTIONS:-false}"
 typeset -r GITHUB_STEP_SUMMARY="${GITHUB_STEP_SUMMARY:-}"
 
+# Get script directory
+typeset -r SCRIPT_DIR="${0:A:h}"
+
 # Print test suite header
 print_header() {
     printf '%s\n' "----------------------------------------"
@@ -88,6 +91,21 @@ print_results() {
     fi
 }
 
+# Find test files in a directory
+find_test_files() {
+    local dir="$1"
+    local files=()
+    
+    # Use find instead of glob to avoid shell syntax issues
+    while IFS= read -r file; do
+        if [[ -f "$file" && "$file" =~ _test\.sh$ ]]; then
+            files+=("$file")
+        fi
+    done < <(find "$dir" -type f -name "*_test.sh" 2>/dev/null)
+    
+    echo "${files[@]}"
+}
+
 # Run a test suite
 run_test_suite() {
     local suite_path="$1"
@@ -102,9 +120,10 @@ run_test_suite() {
     fi
     
     # Find all test files
-    # shellcheck disable=SC2296
-    local test_files=("$suite_path"/*_test.sh(N))
-    if (( ${#test_files} == 0 )); then
+    local test_files
+    test_files=($(find_test_files "$suite_path"))
+    
+    if (( ${#test_files[@]} == 0 )); then
         printf '%b⚠️ Warning: No test files found in %s%b\n' "${YELLOW}" "$suite_path" "${NC}"
         return 0
     fi
@@ -173,10 +192,9 @@ main() {
     print_header
     
     # Run all test suites
-    local test_dir="${0:h}"
-    run_test_suite "$test_dir/unit" "Unit"
-    run_test_suite "$test_dir/integration" "Integration"
-    run_test_suite "$test_dir/system" "System"
+    run_test_suite "$SCRIPT_DIR/unit" "Unit"
+    run_test_suite "$SCRIPT_DIR/integration" "Integration"
+    run_test_suite "$SCRIPT_DIR/system" "System"
     
     print_results
     
