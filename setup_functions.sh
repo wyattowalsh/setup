@@ -90,17 +90,39 @@ cask_installed() {
     brew list --cask "$cask_name" &>/dev/null
 }
 
-# Parse command-line arguments and set flags
+# New function to list available package groups
+list_package_groups() {
+    log "Available package groups:"
+    for group in "${!GROUP_ENABLED[@]}"; do
+        local status="disabled"
+        [[ "${GROUP_ENABLED[$group]}" == "true" ]] && status="enabled"
+        log "  - $group ($status)" "info"
+        if $VERBOSE; then
+            local packages=($=PACKAGE_GROUPS[$group])
+            for package in "${packages[@]}"; do
+                log "    • $package" "debug"
+            done
+        fi
+    done
+}
+
+# Enhanced parse_arguments function to handle group management
 parse_arguments() {
     VERBOSE=false
     DRY_RUN=false
     SKIP_UPDATES=false
+    LIST_GROUPS=false
+    ENABLE_GROUP=""
+    DISABLE_GROUP=""
 
-    while getopts ":vdsh" opt; do
+    while getopts ":vdshlg:e:d:" opt; do
         case $opt in
             v) VERBOSE=true ;;
             d) DRY_RUN=true; VERBOSE=true ;;
             s) SKIP_UPDATES=true ;;
+            l) LIST_GROUPS=true ;;
+            e) ENABLE_GROUP="$OPTARG" ;;
+            x) DISABLE_GROUP="$OPTARG" ;;
             h)
                 print_usage
                 exit 0
@@ -112,16 +134,52 @@ parse_arguments() {
                 ;;
         esac
     done
+
+    # Handle group management if requested
+    if [[ -n "$ENABLE_GROUP" ]]; then
+        if [[ -n "${GROUP_ENABLED[$ENABLE_GROUP]}" ]]; then
+            GROUP_ENABLED[$ENABLE_GROUP]=true
+            log "Enabled package group: $ENABLE_GROUP" "info"
+        else
+            log "Unknown package group: $ENABLE_GROUP" "error"
+            list_package_groups
+            exit 1
+        fi
+    fi
+
+    if [[ -n "$DISABLE_GROUP" ]]; then
+        if [[ -n "${GROUP_ENABLED[$DISABLE_GROUP]}" ]]; then
+            GROUP_ENABLED[$DISABLE_GROUP]=false
+            log "Disabled package group: $DISABLE_GROUP" "info"
+        else
+            log "Unknown package group: $DISABLE_GROUP" "error"
+            list_package_groups
+            exit 1
+        fi
+    fi
+
+    if $LIST_GROUPS; then
+        list_package_groups
+        exit 0
+    fi
 }
 
-# Print usage information
+# Enhanced print_usage function with group management options
 print_usage() {
     echo "Usage: ./setup.zsh [options]"
     echo "Options:"
     echo "  -v           : Enable verbose output"
     echo "  -d           : Dry run mode (no changes made)"
     echo "  -s           : Skip updating existing packages"
+    echo "  -l           : List available package groups"
+    echo "  -e GROUP     : Enable a specific package group"
+    echo "  -x GROUP     : Disable a specific package group"
     echo "  -h           : Display this help message"
+    echo
+    echo "Available package groups:"
+    for group in "${!GROUP_ENABLED[@]}"; do
+        echo "  - $group"
+    done
 }
 
 # Load the configuration file
@@ -270,16 +328,26 @@ install_or_upgrade_brew_item() {
     fi
 }
 
-# Installs predefined packages and casks using Homebrew
+# Enhanced install_brew_items function to handle groups
 install_brew_items() {
-    log "Installing Homebrew packages and casks..."
-
-    for pkg in "${PACKAGES[@]}"; do
-        install_or_upgrade_brew_item "$pkg" "formula"
-    done
-
-    for app in "${APPS[@]}"; do
-        install_or_upgrade_brew_item "$app" "cask"
+    log "Installing Homebrew packages based on enabled groups..."
+    
+    # Get all enabled packages
+    local packages=($(get_enabled_packages))
+    
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        log "No packages to install - all groups are disabled." "warning"
+        return
+    }
+    
+    # Install each package
+    for pkg in "${packages[@]}"; do
+        # Determine if it's a cask or formula
+        if [[ "$pkg" == font-* || -n "$(brew search --casks "^${pkg}$" 2>/dev/null)" ]]; then
+            install_or_upgrade_brew_item "$pkg" "cask"
+        else
+            install_or_upgrade_brew_item "$pkg" "formula"
+        fi
     done
 }
 
@@ -416,9 +484,15 @@ check_default_shell() {
     fi
 }
 
-# Main function that orchestrates the setup process
+# Enhanced main function to handle group management
 main() {
     log "Running setup.zsh version $SCRIPT_VERSION" "info"
+    
+    # If no specific actions are requested, show current group status
+    if [[ $# -eq 0 ]]; then
+        list_package_groups
+    fi
+    
     check_macos_compatibility
     check_user_privileges
     check_network_connectivity
@@ -430,6 +504,7 @@ main() {
     install_powerlevel10k
     append_shell_configs_to_zshrc
     check_default_shell
-    log "Setup completed with warnings." "warning"
+    
+    log "Setup completed successfully." "info"
     log "Please restart your terminal or source your .zshrc to apply changes."
 }

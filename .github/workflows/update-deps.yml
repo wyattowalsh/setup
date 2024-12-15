@@ -1,0 +1,48 @@
+name: Update Dependencies
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  update-deps:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Homebrew
+      run: |
+        brew update
+        
+    - name: Check for outdated packages
+      id: check-outdated
+      run: |
+        # Get list of outdated packages
+        OUTDATED=$(brew outdated)
+        if [ -n "$OUTDATED" ]; then
+          echo "outdated=true" >> $GITHUB_OUTPUT
+          echo "packages<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTDATED" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create Pull Request
+      if: steps.check-outdated.outputs.outdated == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore: update homebrew package versions"
+        title: "chore: update homebrew packages"
+        body: |
+          This PR updates the following Homebrew packages to their latest versions:
+          
+          ```
+          ${{ steps.check-outdated.outputs.packages }}
+          ```
+          
+          This is an automated update triggered by the weekly dependency check.
+        branch: update-deps
+        base: main
+        labels: dependencies 

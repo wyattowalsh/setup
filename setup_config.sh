@@ -1,79 +1,77 @@
+#!/bin/bash
+# This script is intended to be sourced by zsh but maintains sh compatibility for linting
+
 ###################################################
 # Configuration settings for setup.zsh
 #
-# Define the packages, applications, and shell configurations you want for your macOS setup.
+# Define package groups and their configurations for macOS setup.
 ###################################################
 
-# Homebrew packages to install
-PACKAGES=(
-    docker-completion           # Command-line completion for Docker commands in zsh
-    docker-compose              # Tool for defining and running multi-container Docker applications
-    gcc                         # GNU Compiler Collection, essential for compiling code from source
-    gh                          # GitHub CLI for managing GitHub resources from the terminal
-    git                         # Version control system for tracking code changes
-    graphviz                    # Tool for creating visual representations of graphs and networks
-    java                        # Java Development Kit for running Java applications
-    make                        # Utility for building and managing code projects
-    nvm                         # Node Version Manager for installing and managing multiple Node.js versions
-    poetry                      # Python dependency management and packaging tool
-    pyenv                       # Python Version Manager for managing multiple Python versions
-    r                           # R programming language and software environment for statistical computing
-    rbenv                       # Ruby Version Manager for managing multiple Ruby versions
-    ruby-build                  # Add-on for rbenv that provides ruby installation scripts
-    sphinx-doc                  # Documentation generator, primarily for Python projects
-    speedtest-cli               # Command-line interface for testing internet speed
-    stripe/stripe-cli/stripe    # Stripe CLI for managing Stripe resources from the terminal
-    tree                        # Directory listing tool that displays folder structure as a tree
-    unar                        # Utility for extracting RAR archives and other compressed files
-    watchman                    # Tool for watching files and recording changes, often used in development
-    wget                        # Network utility to retrieve files from the web
-    zsh                         # Z shell, an extended Bourne shell with features for interactive use
-    zsh-completions             # Additional completions for Z shell commands
+# Group configuration
+# Set to true to enable, false to disable
+declare -A GROUP_ENABLED
+GROUP_ENABLED=(
+    ["core"]="true"              # Core development tools and utilities
+    ["python"]="true"           # Python development environment
+    ["java"]="true"            # Java development environment
+    ["ruby"]="true"            # Ruby development environment
+    ["node"]="true"            # Node.js development environment
+    ["docker"]="true"          # Container development environment
+    ["r_stats"]="true"         # R statistical computing environment
+    ["web"]="true"             # Web development tools
+    ["data_science"]="true"    # Data science and analysis tools
+    ["writing"]="true"         # Documentation and writing tools
+    ["media"]="true"           # Media and entertainment
+    ["system"]="true"          # System utilities and enhancements
+    ["fonts"]="true"           # Development and system fonts
 )
 
-# Cask apps to install
-APPS=(
-    db-browser-for-sqlite  # GUI browser for SQLite databases, useful for database management
-    docker                 # Container platform for building, running, and managing containerized applications
-    glance                 # A quick system monitor for macOS, displays resource usage
-    github                 # GitHub desktop application for managing GitHub repositories
-    google-chrome          # Popular web browser by Google
-    google-drive           # Google Drive desktop client for file storage and synchronization
-    iina                   # Modern macOS media player with a sleek interface and powerful features
-    jupyter-notebook-ql    # QuickLook extension for previewing Jupyter notebooks in Finder
-    logi-options+          # Logitech application for configuring Logitech peripherals
-    mark-text              # Markdown editor with a simple and intuitive interface
-    miniconda              # Distribution of Python and packages for data science and machine learning
-    notion                 # All-in-one workspace for notes, tasks, and projects
-    obsidian               # Markdown-based knowledge base and note-taking app
-    qlmarkdown             # QuickLook plugin for previewing Markdown files in Finder
-    quicklook-csv          # QuickLook plugin for previewing CSV files in Finder
-    responsively           # Browser tailored for responsive web development
-    slack                  # Collaboration and communication tool, popular for team chat
-    spotify                # Music streaming app with a vast library of songs
-    visual-studio-code     # Source code editor with support for debugging, syntax highlighting, and more
-    webpquicklook          # QuickLook plugin for previewing WebP images in Finder
-    zotero                 # Reference manager for managing and organizing research sources
+# Define package groups
+declare -A PACKAGE_GROUPS
+PACKAGE_GROUPS=(
+    ["core"]="gcc git gh make tree wget zsh zsh-completions visual-studio-code github"
 
-    # Font casks
-    font-sf-pro                          # San Francisco Pro font family by Apple
-    font-sf-compact                      # San Francisco Compact font family by Apple
-    font-sf-mono                         # San Francisco Mono font family by Apple
-    font-new-york                        # New York serif font family by Apple
-    font-fira-code                       # Monospaced font with programming ligatures
-    font-montserrat                      # Versatile sans-serif font
-    font-fontawesome                     # Iconic font and CSS toolkit
-    font-awesome-terminal-fonts          # Awesome terminal fonts with icons
-    font-academicons                     # Font for academic-related icons
-    font-devicons                        # Font for development-related icons
-    font-foundation-icons                # Foundation's icon font
-    font-material-design-icons-webfont   # Material Design Icons in web font format
-    font-material-icons                  # Google's Material Icons font
-    font-mynaui-icons                    # Icon font for Mynaui projects
-    font-simple-line-icons               # Minimal and elegant icon font
+    ["python"]="pyenv poetry miniconda jupyter-notebook-ql sphinx-doc"
+
+    ["java"]="java graphviz"
+
+    ["ruby"]="rbenv ruby-build"
+
+    ["node"]="nvm watchman"
+
+    ["docker"]="docker docker-completion docker-compose"
+
+    ["r_stats"]="r"
+
+    ["web"]="google-chrome responsively quicklook-csv qlmarkdown webpquicklook"
+
+    ["data_science"]="db-browser-for-sqlite jupyter-notebook-ql"
+
+    ["writing"]="mark-text notion obsidian zotero"
+
+    ["media"]="iina spotify"
+
+    ["system"]="glance google-drive logi-options+ slack speedtest-cli unar"
+
+    ["fonts"]="font-sf-pro font-sf-compact font-sf-mono font-new-york font-fira-code font-montserrat font-fontawesome font-awesome-terminal-fonts font-academicons font-devicons font-foundation-icons font-material-design-icons-webfont font-material-icons font-mynaui-icons font-simple-line-icons"
 )
 
-# PATH exports and other shell configurations
+# Function to get all enabled packages
+get_enabled_packages() {
+    local enabled_packages=""
+    local IFS=$'\n'
+    for group in "${!GROUP_ENABLED[@]}"; do
+        if [ "${GROUP_ENABLED[$group]}" = "true" ]; then
+            enabled_packages="${enabled_packages} ${PACKAGE_GROUPS[$group]}"
+        fi
+    done
+    echo "${enabled_packages# }"
+}
+
+# Set PACKAGES array based on enabled groups
+PACKAGES=($(get_enabled_packages))
+
+# Shell configurations
 SHELL_CONFIGS=(
     # Initialize Homebrew and set HOMEBREW_PREFIX
     'if [ -x /opt/homebrew/bin/brew ]; then
@@ -81,7 +79,7 @@ SHELL_CONFIGS=(
     elif [ -x /usr/local/bin/brew ]; then
         eval "$(/usr/local/bin/brew shellenv)"
     fi'
-    'export HOMEBREW_PREFIX="$(brew --prefix)"'                                # Define Homebrew prefix path for easier reference
+    'export HOMEBREW_PREFIX="$(brew --prefix)"'
 
     # Ensure Homebrew bin is in PATH
     'export PATH="$HOMEBREW_PREFIX/bin:$PATH"'
@@ -127,8 +125,6 @@ SHELL_CONFIGS=(
     # Source Powerlevel10k theme
     'if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k/powerlevel10k.zsh-theme" ]; then
         source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k/powerlevel10k.zsh-theme"
-    else
-        echo "Powerlevel10k theme not found at ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k/powerlevel10k.zsh-theme"
     fi'
 
     # Load Powerlevel10k configuration if it exists
