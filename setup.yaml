@@ -1,7 +1,6 @@
 # Environment Groups Configuration
 groups:
   core:
-    enabled: true
     description: Core development tools
     packages:
       - gcc
@@ -16,7 +15,6 @@ groups:
       - github
 
   python:
-    enabled: true
     description: Python development environment
     packages:
       - pyenv
@@ -26,28 +24,24 @@ groups:
       - sphinx-doc
 
   java:
-    enabled: true
     description: Java development environment
     packages:
       - java
       - graphviz
 
   ruby:
-    enabled: true
     description: Ruby development environment
     packages:
       - rbenv
       - ruby-build
 
   node:
-    enabled: true
     description: Node.js development environment
     packages:
       - nvm
       - watchman
 
   docker:
-    enabled: true
     description: Container development environment
     packages:
       - docker
@@ -55,13 +49,11 @@ groups:
       - docker-compose
 
   r_stats:
-    enabled: true
     description: R statistical computing environment
     packages:
       - r
 
   web:
-    enabled: true
     description: Web development tools
     packages:
       - google-chrome
@@ -71,14 +63,12 @@ groups:
       - webpquicklook
 
   data_science:
-    enabled: true
     description: Data science and analysis tools
     packages:
       - db-browser-for-sqlite
       - jupyter-notebook-ql
 
   writing:
-    enabled: true
     description: Documentation and writing tools
     packages:
       - mark-text
@@ -87,14 +77,12 @@ groups:
       - zotero
 
   media:
-    enabled: true
     description: Media and entertainment
     packages:
       - iina
       - spotify
 
   system:
-    enabled: true
     description: System utilities and enhancements
     packages:
       - glance
@@ -105,7 +93,6 @@ groups:
       - unar
 
   fonts:
-    enabled: true
     description: Development and system fonts
     packages:
       - font-sf-pro

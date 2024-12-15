@@ -27,7 +27,7 @@ ${BOLD}Options:${NC}
 
 ${BOLD}Configuration:${NC}
   Edit ${ITALIC}setup.yaml${NC} to customize your environment
-  Enable/disable package groups by setting 'enabled: true/false'
+  Add or remove package groups and their packages as needed
 
 EOF
     exit 0
@@ -89,6 +89,51 @@ parse_args() {
     done
 }
 
+# Setup package groups
+setup_packages() {
+    local groups
+    groups=($(get_configured_groups))
+    
+    if (( ${#groups[@]} == 0 )); then
+        warn "No package groups found in $CONFIG_FILE"
+        return 0
+    fi
+    
+    for group in "${groups[@]}"; do
+        info "Setting up package group: $group"
+        
+        # Get brew packages
+        local brew_packages=($(get_group_packages "$group" "brew"))
+        if (( ${#brew_packages[@]} > 0 )); then
+            info "Installing brew packages for $group"
+            install_packages_parallel "brew" "${brew_packages[@]}" || return 1
+        fi
+        
+        # Get cask packages
+        local cask_packages=($(get_group_packages "$group" "cask"))
+        if (( ${#cask_packages[@]} > 0 )); then
+            info "Installing cask packages for $group"
+            install_packages_parallel "cask" "${cask_packages[@]}" || return 1
+        fi
+        
+        # Get npm packages
+        local npm_packages=($(get_group_packages "$group" "npm"))
+        if (( ${#npm_packages[@]} > 0 )); then
+            info "Installing npm packages for $group"
+            install_packages_parallel "npm" "${npm_packages[@]}" || return 1
+        fi
+        
+        # Get pip packages
+        local pip_packages=($(get_group_packages "$group" "pip"))
+        if (( ${#pip_packages[@]} > 0 )); then
+            info "Installing pip packages for $group"
+            install_packages_parallel "pip" "${pip_packages[@]}" || return 1
+        fi
+    done
+    
+    return 0
+}
+
 # Main setup function
 main() {
     local start_time=$SECONDS
@@ -127,10 +172,10 @@ main() {
         warn "Homebrew update failed, continuing with installation"
     fi
     
-    # Setup environments
-    print_section "Environment Setup" "$TOOLS"
-    if ! setup_environments; then
-        error "Failed to setup environments"
+    # Setup packages
+    print_section "Package Installation" "$TOOLS"
+    if ! setup_packages; then
+        error "Failed to setup packages"
         return 1
     fi
     

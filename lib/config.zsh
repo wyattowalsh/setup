@@ -8,14 +8,8 @@ source "${0:A:h}/logging.zsh"
 # Default configuration file
 declare -r DEFAULT_CONFIG="setup.yaml"
 
-# Environment states
-declare -A ENVIRONMENTS
-
-# Package lists
-declare -A BREW_PACKAGES
-declare -A CASK_PACKAGES
-declare -A NPM_PACKAGES
-declare -A PIP_PACKAGES
+# Package lists by group
+declare -A PACKAGE_GROUPS
 
 # Load YAML configuration
 load_config() {
@@ -34,58 +28,70 @@ load_config() {
         return 1
     }
     
-    # Load environments
-    while IFS= read -r line; do
-        local env_name="$(echo "$line" | cut -d' ' -f1)"
-        local enabled="$(echo "$line" | cut -d' ' -f2)"
-        ENVIRONMENTS[$env_name]="$enabled"
-    done < <(yq e '.environments | to_entries | .[] | .key + " " + (.value.enabled | @text)' "$config_file")
+    # Load package groups
+    while IFS= read -r group; do
+        local packages=($(yq e ".groups.$group.packages[]" "$config_file" 2>/dev/null))
+        if (( ${#packages[@]} > 0 )); then
+            PACKAGE_GROUPS[$group]="${packages[*]}"
+            debug "Loaded ${#packages[@]} packages for group: $group"
+        fi
+    done < <(yq e '.groups | keys | .[]' "$config_file" 2>/dev/null)
     
-    # Load package lists
-    load_package_list "$config_file" "brew" BREW_PACKAGES
-    load_package_list "$config_file" "cask" CASK_PACKAGES
-    load_package_list "$config_file" "npm" NPM_PACKAGES
-    load_package_list "$config_file" "pip" PIP_PACKAGES
+    # Validate we loaded something
+    if (( ${#PACKAGE_GROUPS[@]} == 0 )); then
+        error "No valid package groups found in configuration"
+        return 1
+    fi
     
     debug "Configuration loaded successfully"
+    debug "Found ${#PACKAGE_GROUPS[@]} package groups"
     return 0
 }
 
-# Load package list from configuration
-load_package_list() {
-    local config_file="$1"
-    local type="$2"
-    local -n packages="$3"
-    
-    while IFS= read -r line; do
-        local env_name="$(echo "$line" | cut -d' ' -f1)"
-        local package="$(echo "$line" | cut -d' ' -f2)"
-        packages[$package]="$env_name"
-    done < <(yq e ".environments.*.packages[] | select(. == \"*.$type.*\") | parent | parent | parent | key + \" \" + ." "$config_file" 2>/dev/null)
+# Get all configured groups
+get_configured_groups() {
+    echo "${(k)PACKAGE_GROUPS[@]}"
 }
 
-# Get enabled environments
-get_enabled_environments() {
-    local -a enabled=()
-    for env in "${(k)ENVIRONMENTS[@]}"; do
-        if [[ "${ENVIRONMENTS[$env]}" == "true" ]]; then
-            enabled+=("$env")
-        fi
-    done
-    echo "${enabled[@]}"
-}
-
-# Get packages for an environment
-get_environment_packages() {
-    local env_name="$1"
+# Get packages for a group
+get_group_packages() {
+    local group_name="$1"
     local type="$2"
     local -a packages=()
     
-    for package in "${(k)BREW_PACKAGES[@]}"; do
-        if [[ "${BREW_PACKAGES[$package]}" == "$env_name" ]]; then
-            packages+=("$package")
-        fi
-    done
+    # If group exists, filter packages by type
+    if [[ -n "${PACKAGE_GROUPS[$group_name]}" ]]; then
+        local all_packages=(${=PACKAGE_GROUPS[$group_name]})
+        for package in "${all_packages[@]}"; do
+            # Match package type based on common patterns
+            case "$type" in
+                brew)
+                    # Exclude cask packages and font packages
+                    if [[ "$package" != *".cask"* && "$package" != "font-"* ]]; then
+                        packages+=("$package")
+                    fi
+                    ;;
+                cask)
+                    # Include .cask packages and font packages
+                    if [[ "$package" == *".cask"* || "$package" == "font-"* ]]; then
+                        packages+=("$package")
+                    fi
+                    ;;
+                npm)
+                    # Include npm packages
+                    if [[ "$package" == "npm:"* ]]; then
+                        packages+=("${package#npm:}")
+                    fi
+                    ;;
+                pip)
+                    # Include pip packages
+                    if [[ "$package" == "pip:"* ]]; then
+                        packages+=("${package#pip:}")
+                    fi
+                    ;;
+            esac
+        done
+    fi
     
     echo "${packages[@]}"
 }
@@ -99,27 +105,33 @@ validate_config() {
         return 1
     }
     
-    # Check for required sections
-    if ! yq e '.environments' "$config_file" >/dev/null 2>&1; then
-        error "Missing required section: environments"
+    # Basic YAML syntax check
+    if ! yq e '.' "$config_file" >/dev/null 2>&1; then
+        error "Invalid YAML syntax in configuration file"
         return 1
     }
     
-    # Validate environment structure
-    while IFS= read -r env; do
-        if ! yq e ".environments.$env.enabled" "$config_file" >/dev/null 2>&1; then
-            error "Missing 'enabled' field for environment: $env"
-            return 1
+    # Check for groups section
+    if ! yq e '.groups' "$config_file" >/dev/null 2>&1; then
+        error "Missing required section: groups"
+        return 1
+    }
+    
+    # Validate each group has packages
+    local invalid_groups=()
+    while IFS= read -r group; do
+        if ! yq e ".groups.$group.packages" "$config_file" >/dev/null 2>&1; then
+            invalid_groups+=("$group")
         fi
-        
-        if ! yq e ".environments.$env.packages" "$config_file" >/dev/null 2>&1; then
-            error "Missing 'packages' field for environment: $env"
-            return 1
-        fi
-    done < <(yq e '.environments | keys | .[]' "$config_file")
+    done < <(yq e '.groups | keys | .[]' "$config_file")
+    
+    if (( ${#invalid_groups[@]} > 0 )); then
+        warn "The following groups are missing package lists:"
+        printf '%s\n' "${invalid_groups[@]}" | sed 's/^/  - /'
+    fi
     
     return 0
 }
 
 # Export functions
-export -f load_config load_package_list get_enabled_environments get_environment_packages validate_config 
+export -f load_config get_configured_groups get_group_packages validate_config
