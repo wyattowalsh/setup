@@ -13,6 +13,26 @@ declare -i DRY_RUN=0
 declare -i SKIP_UPDATE=0
 declare -r CONFIG_FILE="$SCRIPT_DIR/setup.yaml"
 
+# Print help message
+print_help() {
+    cat << EOF
+
+${BLUE}${BOLD}Usage:${NC} ./setup.zsh [options]
+
+${BOLD}Options:${NC}
+  -h, --help         Show this help message
+  -v, --verbose      Show detailed output
+  -d, --dry-run      Preview changes without applying
+  -s, --skip-update  Skip updating existing packages
+
+${BOLD}Configuration:${NC}
+  Edit ${ITALIC}setup.yaml${NC} to customize your environment
+  Enable/disable package groups by setting 'enabled: true/false'
+
+EOF
+    exit 0
+}
+
 # Print welcome message
 print_welcome() {
     cat << EOF
@@ -56,26 +76,6 @@ parse_args() {
                 DRY_RUN=1
                 shift
                 ;;
-            -e|--enable)
-                if [[ -z "$2" ]]; then
-                    error "No environment specified for --enable"
-                    exit 1
-                fi
-                enable_environment "$2" "$CONFIG_FILE"
-                shift 2
-                ;;
-            -x|--disable)
-                if [[ -z "$2" ]]; then
-                    error "No environment specified for --disable"
-                    exit 1
-                fi
-                disable_environment "$2" "$CONFIG_FILE"
-                shift 2
-                ;;
-            -l|--list)
-                list_environments "$CONFIG_FILE"
-                exit 0
-                ;;
             -s|--skip-update)
                 SKIP_UPDATE=1
                 shift
@@ -87,33 +87,6 @@ parse_args() {
                 ;;
         esac
     done
-}
-
-# Setup enabled environments
-setup_environments() {
-    local environments
-    environments=($(get_enabled_environments))
-    
-    if (( ${#environments[@]} == 0 )); then
-        warn "No environments are enabled"
-        return 0
-    fi
-    
-    for env in "${environments[@]}"; do
-        info "Setting up environment: $env"
-        local packages=($(get_environment_packages "$env" "brew"))
-        local casks=($(get_environment_packages "$env" "cask"))
-        
-        if (( ${#packages[@]} > 0 )); then
-            install_packages_parallel "brew" "${packages[@]}" || return 1
-        fi
-        
-        if (( ${#casks[@]} > 0 )); then
-            install_packages_parallel "cask" "${casks[@]}" || return 1
-        fi
-    done
-    
-    return 0
 }
 
 # Main setup function
